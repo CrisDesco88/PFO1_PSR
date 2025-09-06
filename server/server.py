@@ -21,11 +21,13 @@ def init_socket():
         print(f"Error al inicializar el socket: {e}")
         return None
 
-def init_db():
-    """Inicializa la base de datos SQLite."""
+def handle_client(client_socket, client_address):
+    """Maneja la conexión de un cliente."""
+    print(f"Conexión aceptada de {client_address}")
+    db_conn = None  # Inicializar db_conn a None
     try:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
+        db_conn = sqlite3.connect(DB_NAME)
+        cursor = db_conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS mensajes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,17 +36,7 @@ def init_db():
                 ip_cliente TEXT NOT NULL
             )
         """)
-        conn.commit()
-        print("Base de datos inicializada correctamente.")
-        return conn
-    except sqlite3.Error as e:
-        print(f"Error al inicializar la base de datos: {e}")
-        return None
-
-def handle_client(client_socket, client_address, db_conn):
-    """Maneja la conexión de un cliente."""
-    print(f"Conexión aceptada de {client_address}")
-    try:
+        db_conn.commit()
         while True:
             data = client_socket.recv(1024)
             if not data:
@@ -56,7 +48,6 @@ def handle_client(client_socket, client_address, db_conn):
 
             # Guardar el mensaje en la base de datos
             try:
-                cursor = db_conn.cursor()
                 cursor.execute("""
                     INSERT INTO mensajes (contenido, fecha_envio, ip_cliente)
                     VALUES (?, ?, ?)
@@ -75,6 +66,9 @@ def handle_client(client_socket, client_address, db_conn):
     finally:
         print(f"Conexión con {client_address} cerrada.")
         client_socket.close()
+        if db_conn:
+            db_conn.close()
+
 
 def main():
     """Función principal del servidor."""
@@ -83,15 +77,10 @@ def main():
         print("No se pudo inicializar el socket. Saliendo...")
         return
 
-    db_conn = init_db()
-    if not db_conn:
-        print("No se pudo inicializar la base de datos. Saliendo...")
-        return
-
     try:
         while True:
             client_socket, client_address = server_socket.accept()
-            client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address, db_conn))
+            client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address,))
             client_thread.start()
     except socket.error as e:
         print(f"Error al aceptar conexiones: {e}")
@@ -100,8 +89,6 @@ def main():
     finally:
         if server_socket:
             server_socket.close()
-        if db_conn:
-            db_conn.close()
         print("Servidor cerrado.")
 
 if __name__ == "__main__":
